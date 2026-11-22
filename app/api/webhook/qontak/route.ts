@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import {
-  bindRoomToSession,
-  getLatestPendingHandoverSession,
-  getSessionByRoomId,
-} from '@/lib/sessionStore';
+import { getSessionByRoomId, saveSession } from '@/lib/sessionStore';
 
 export async function POST(req: Request) {
   try {
@@ -11,21 +7,13 @@ export async function POST(req: Request) {
     console.log('Webhook Qontak masuk:', JSON.stringify(body));
 
     const event = body.data_event || body.event || body.type;
-   const roomId = body.room?.id || body.room_id || body.data?.room?.id || body.id;
+    const roomId = body.room?.id || body.room_id || body.data?.room?.id || body.id;
 
     if (!roomId) {
       return NextResponse.json({ ok: true });
     }
 
-    let session = getSessionByRoomId(roomId);
-    if (!session) {
-      const pending = getLatestPendingHandoverSession();
-      if (pending) {
-        bindRoomToSession(roomId, pending.sessionId);
-        session = pending;
-      }
-    }
-
+    const session = await getSessionByRoomId(roomId);
     if (!session) {
       return NextResponse.json({ ok: true });
     }
@@ -34,28 +22,25 @@ export async function POST(req: Request) {
       body.sender_type || body.message?.sender_type || body.participant_type;
     const messageType = body.type || body.message?.type;
     const messageText = body.text || body.message?.text || '';
-    const messageId =
-      body.id || body.message?.id || `agent-${Date.now()}`;
+    const messageId = body.id || body.message?.id || `agent-${Date.now()}`;
 
-    // 1. Cek event atau system message Resolve dari Qontak
     const isResolvedEvent =
-  event === 'room_resolved' ||
-  event === 'resolve_room' ||
-  body.status === 'resolved' ||
-  body.room?.status === 'resolved' ||
-  body.data?.room?.status === 'resolved' ||
-  Boolean(body.room?.resolved_at || body.resolved_at) ||
-  (typeof messageText === 'string' &&
-    messageText.toLowerCase().includes('conversation has been resolved'));
+      event === 'room_resolved' ||
+      event === 'resolve_room' ||
+      body.status === 'resolved' ||
+      body.room?.status === 'resolved' ||
+      body.data?.room?.status === 'resolved' ||
+      Boolean(body.room?.resolved_at || body.resolved_at) ||
+      (typeof messageText === 'string' &&
+        messageText.toLowerCase().includes('conversation has been resolved'));
 
     if (isResolvedEvent) {
       session.resolved = true;
       session.mode = 'ai';
-      session.updatedAt = Date.now();
+      await saveSession(session);
       return NextResponse.json({ ok: true });
     }
 
-    // 2. Cek balasan pesan dari agen
     if (
       messageText &&
       messageType !== 'system' &&
@@ -74,7 +59,7 @@ export async function POST(req: Request) {
           text: messageText,
           timestamp: Date.now(),
         });
-        session.updatedAt = Date.now();
+        await saveSession(session);
       }
     }
 

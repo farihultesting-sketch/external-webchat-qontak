@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { bindRoomToSession, getOrCreateSession } from '@/lib/sessionStore';
+import {
+  bindRoomToSession,
+  getOrCreateSession,
+  saveSession,
+} from '@/lib/sessionStore';
 import { sendQontakMessage, startQontakConversation } from '@/lib/qontakApi';
 
 export async function POST(req: Request) {
@@ -13,26 +17,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const origin =
-      req.headers.get('origin') ||
-      new URL(req.url).origin;
+    const origin = req.headers.get('origin') || new URL(req.url).origin;
 
-    const session = getOrCreateSession(sessionId);
+    const session = await getOrCreateSession(sessionId);
     session.mode = 'agent';
     session.resolved = false;
     session.historySummary = historySummary || '';
-    session.updatedAt = Date.now();
+    await saveSession(session);
 
-    // 1. Buat room baru di Qontak secara server-to-server
     const { roomId, accountUniqId, extId } = await startQontakConversation({
       sessionId,
       widgetDomain: origin,
     });
 
-    // 2. Ikat roomId langsung ke sessionId
-    bindRoomToSession(roomId, sessionId, extId, accountUniqId);
+    await bindRoomToSession(roomId, sessionId, extId, accountUniqId);
 
-    // 3. Kirim pesan pembuka + ringkasan percakapan AI ke inbox agen
     const initialText = historySummary
       ? `Halo, saya ingin terhubung dengan agen.\n\n[Ringkasan Chat AI]\n${historySummary}`
       : 'Halo, saya ingin terhubung dengan agen.';

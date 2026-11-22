@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ messages: [], resolved: false });
   }
 
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session) {
     return NextResponse.json({ messages: [], resolved: false });
   }

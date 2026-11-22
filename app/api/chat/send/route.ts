@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const session = getOrCreateSession(sessionId);
+    const session = await getOrCreateSession(sessionId);
 
     if (!session.roomId || !session.accountUniqId || !session.extId) {
       return NextResponse.json(
@@ -22,9 +22,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const origin =
-      req.headers.get('origin') ||
-      new URL(req.url).origin;
+    const origin = req.headers.get('origin') || new URL(req.url).origin;
 
     await sendQontakMessage({
       roomId: session.roomId,
